@@ -1,4 +1,3 @@
-#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/fs.h>
@@ -8,6 +7,7 @@
 #include <linux/init.h>
 #include <linux/cdev.h>
 #include <linux/kdev_t.h>
+#include <linux/slab.h>
 #include <asm/io.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -25,14 +25,26 @@ struct globalmem_dev
 	unsigned char mem[GLOBALMEM_SIZE];	
 };
 
-struct globalmem_dev dev;
+struct globalmem_dev *globalmem_devp;
 
-static ssize_t globalmem_read(struct file *flip, char __user *buf, size_t count, loff_t *ppos)
+int globalmem_open(struct inode *inode, struct file *filp)
+{
+	filp->private_data = globalmem_devp;
+	return 0;
+}
+
+int globalmem_release(struct inode *inode, struct file *filp)
+{
+	return 0;
+}
+
+static ssize_t globalmem_read(struct file *flip, char __user *buf, size_t size, loff_t *ppos)
 {
 	unsigned long p = *ppos;
-	
+	unsigned int count = size;
 	int ret = 0;
-	
+	struct globalmem_dev *dev = flip->private_data;
+
 	if (p >= GLOBALMEM_SIZE)
 	{
 		return 0;
@@ -41,7 +53,7 @@ static ssize_t globalmem_read(struct file *flip, char __user *buf, size_t count,
 	{
 		count = GLOBALMEM_SIZE - p;
 	}
-	if (copy_to_user(buf, (void*)(dev.mem + p), count))
+	if (copy_to_user(buf, (void*)(dev->mem + p), count))
 	{
 		ret = -EFAULT;
 	}
@@ -54,11 +66,13 @@ static ssize_t globalmem_read(struct file *flip, char __user *buf, size_t count,
 	return ret;
 }
 
-static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t count, loff_t *ppos)
+static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t size, loff_t *ppos)
 {
 	unsigned long p = *ppos;
+	unsigned int count = size;
 	int ret = 0;
 
+	struct globalmem_dev *dev = filp->private_data;
 	if (p >= GLOBALMEM_SIZE)
 	{
 		return 0;
@@ -68,7 +82,7 @@ static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t
 		count = GLOBALMEM_SIZE - p;
 	}
 	
-	if (copy_from_user(dev.mem + p, buf, count))
+	if (copy_from_user(dev->mem + p, buf, count))
 	{
 		ret = -EFAULT;
 	}
@@ -122,10 +136,12 @@ static loff_t globalmem_llseek(struct file *filp, loff_t offset, int orig)
 
 static int globalmem_ioctl(struct inode *inodep, struct file *filp, unsigned int cmd, unsigned long arg)
 {
+	struct globalmem_dev *dev = filp->private_data;
+
 	switch (cmd)
 	{
 		case MEM_CLEAR:
-			memset(dev.mem, 0, GLOBALMEM_SIZE);
+			memset(dev->mem, 0, GLOBALMEM_SIZE);
 			printk(KERN_INFO "globalmem is set to zero\n");
 			break;
 		default:
@@ -140,15 +156,17 @@ static const struct file_operations globalmem_fops = {
 	.read		 					= globalmem_read,
 	.write	 					= globalmem_write,
 	.unlocked_ioctl		= globalmem_ioctl,
+	.open							= globalmem_open,
+	.release					= globalmem_release,
 };
 
-static void globalmem_setup_cdev()
+static void globalmem_setup_cdev(struct globalmem_dev *dev, int index)
 {
 	int err, devno = MKDEV(globalmem_major, 0);
 	
-	cdev_init(&dev.cdev, &globalmem_fops);
-	dev.cdev.owner = THIS_MODULE;
-	err = cdev_add(&dev.cdev, devno, 1);
+	cdev_init(&(dev->cdev), &globalmem_fops);
+	dev->cdev.owner = THIS_MODULE;
+	err = cdev_add(&(dev->cdev), devno, 1);
 	if (err)
 	{
 		printk(KERN_NOTICE "Error %d adding globalmem", err);
@@ -175,13 +193,24 @@ static int globalmem_init(void)
 	{
 		return result;
 	}
-	globalmem_setup_cdev();
+	globalmem_devp = kmalloc(sizeof(struct globalmem_dev), GFP_KERNEL);
+	if (globalmem_devp == NULL)
+	{
+		result = -ENOMEM;
+		goto fail_malloc;
+	}
+	memset(globalmem_devp, 0, sizeof(struct globalmem_dev));
+	globalmem_setup_cdev(globalmem_devp, 0);
   return 0;
+fail_malloc:
+	unregister_chrdev_region(devno, 1);
+	return result;
 }
 
 static void globalmem_exit(void)
 {
-	cdev_del(&dev.cdev);
+	cdev_del(&globalmem_devp->cdev);
+	kfree(globalmem_devp);
 	unregister_chrdev_region(MKDEV(globalmem_major, 0), 1);
   printk("globalmem leave see you\n");
 }
