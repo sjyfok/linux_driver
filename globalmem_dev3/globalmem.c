@@ -9,7 +9,7 @@
 #include <linux/kdev_t.h>
 #include <linux/slab.h>
 #include <asm/io.h>
-#include <asm/system.h>
+//#include <asm/system.h>
 #include <asm/uaccess.h>
 
 
@@ -54,6 +54,10 @@ static ssize_t globalmem_read(struct file *flip, char __user *buf, size_t size, 
 	{
 		count = GLOBALMEM_SIZE - p;
 	}
+	if (down_interruptible(&dev->sem))
+	{
+		return ERESTARTSYS;
+	}
 	if (copy_to_user(buf, (void*)(dev->mem + p), count))
 	{
 		ret = -EFAULT;
@@ -64,6 +68,7 @@ static ssize_t globalmem_read(struct file *flip, char __user *buf, size_t size, 
 		ret = count;
 		printk(KERN_INFO "read %d bytes form %d\n", count, p);
 	}
+	up(&dev->sem);
 	return ret;
 }
 
@@ -82,7 +87,10 @@ static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t
 	{
 		count = GLOBALMEM_SIZE - p;
 	}
-	
+	if (down_interruptible(&dev->sem))
+	{
+		return ERESTARTSYS;
+	}
 	if (copy_from_user(dev->mem + p, buf, count))
 	{
 		ret = -EFAULT;
@@ -93,6 +101,7 @@ static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t
 		ret = count;
 		printk(KERN_INFO "written %d bytes form %d\n", count, p);
 	}
+	up(&dev->sem);
 	return ret;
 }
 
@@ -142,7 +151,10 @@ static int globalmem_ioctl(struct inode *inodep, struct file *filp, unsigned int
 	switch (cmd)
 	{
 		case MEM_CLEAR:
+			if(down_interruptible(&dev->sem))
+				return ERESTARTSYS;
 			memset(dev->mem, 0, GLOBALMEM_SIZE);
+			up(&dev->sem);
 			printk(KERN_INFO "globalmem is set to zero\n");
 			break;
 		default:
@@ -202,7 +214,8 @@ static int globalmem_init(void)
 	}
 	memset(globalmem_devp, 0, sizeof(struct globalmem_dev));
 	globalmem_setup_cdev(globalmem_devp, 0);
-	init_MUTEX(&globalmem_devp->sem);  //init semaphore
+	//init_MUTEX(&globalmem_devp->sem);  //init semaphore
+	sema_init(&globalmem_devp->sem, 1);
   return 0;
 fail_malloc:
 	unregister_chrdev_region(devno, 1);
