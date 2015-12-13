@@ -1,0 +1,6 @@
+mknod /dev/globalmem c major 0
+
+echo "hello" | /dev/globalmem     //for write
+cat /dev/globalmem								 //for read
+
+

@@ -15,7 +15,7 @@
 
 #define	GLOBALMEM_SIZE   	0x1000
 #define	MEM_CLEAR					0x1
-#define	GLOBALMEM_MAJOR		255
+#define	GLOBALMEM_MAJOR		0
 
 static int globalmem_major = GLOBALMEM_MAJOR;
 
