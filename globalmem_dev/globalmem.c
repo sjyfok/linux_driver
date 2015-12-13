@@ -9,13 +9,14 @@
 #include <linux/kdev_t.h>
 #include <linux/slab.h>
 #include <asm/io.h>
-#include <asm/system.h>
+//#include <asm/system.h>
 #include <asm/uaccess.h>
 
 
 #define	GLOBALMEM_SIZE   	0x1000
 #define	MEM_CLEAR					0x1
 #define	GLOBALMEM_MAJOR		255
+#define	DEV_NAME					"globalmem"
 
 static int globalmem_major = GLOBALMEM_MAJOR;
 
