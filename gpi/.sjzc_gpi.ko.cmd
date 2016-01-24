@@ -1,0 +1,1 @@
+cmd_/home/song/imx/app/linux_driver/gpi/sjzc_gpi.ko := arm-linux-ld -EL -r  -T /home/song/imx/kernel-imx/kernel-imx/scripts/module-common.lds --build-id  -o /home/song/imx/app/linux_driver/gpi/sjzc_gpi.ko /home/song/imx/app/linux_driver/gpi/sjzc_gpi.o /home/song/imx/app/linux_driver/gpi/sjzc_gpi.mod.o
